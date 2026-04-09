@@ -1,0 +1,16 @@
+{
+  "name": "vidsync-server",
+  "version": "0.1.0",
+  "description": "VidSync WebSocket signaling server",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@flydotio/dockerfile": "^0.7.10"
+  }
+}
