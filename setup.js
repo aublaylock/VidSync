@@ -38,6 +38,29 @@ for (const size of [16, 48, 128]) {
 
 console.log('\nIcons written to extension/icons/');
 
+// ---------- Sync shared files into extension-chrome/ ----------
+// extension-chrome/ has its own manifest.json (no background.scripts).
+// Everything else is identical — copy it here so there's one source of truth.
+
+const SHARED = ['background.js', 'content.js', 'popup.html', 'popup.js'];
+const chromeDest = path.join(__dirname, 'extension-chrome');
+fs.mkdirSync(path.join(chromeDest, 'icons'), { recursive: true });
+
+for (const file of SHARED) {
+  fs.copyFileSync(
+    path.join(__dirname, 'extension', file),
+    path.join(chromeDest, file)
+  );
+}
+for (const size of [16, 48, 128]) {
+  const name = `icon${size}.png`;
+  fs.copyFileSync(
+    path.join(__dirname, 'extension', 'icons', name),
+    path.join(chromeDest, 'icons', name)
+  );
+}
+console.log('✓ Shared files synced to extension-chrome/');
+
 // ---------- TLS cert for local WSS (Firefox requires WSS even on localhost) ----------
 
 const certDir  = path.join(__dirname, 'server', '.cert');
