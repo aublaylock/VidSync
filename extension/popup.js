@@ -106,13 +106,14 @@ async function startSession() {
     return;
   }
 
-  const roomId = generateRoomId();
+  const roomId    = generateRoomId();
+  const hostToken = generateRoomId(); // secret token — only the host knows it
   log('startSession  room=%s  tabId=%s  url=%s', roomId, tab.id, tab.url);
   state.connecting = true;
   render();
 
   try {
-    const resp = await chrome.runtime.sendMessage({ type: 'start-session', room: roomId, tabId: tab.id });
+    const resp = await chrome.runtime.sendMessage({ type: 'start-session', room: roomId, hostToken, tabId: tab.id });
     log('start-session response:', resp);
     state.room = roomId;
     state.connecting = false;

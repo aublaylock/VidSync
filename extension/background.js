@@ -2,10 +2,11 @@
 
 // Development: 'wss://localhost:8443'  (Firefox requires WSS even for localhost)
 // Production:  'wss://your-server.fly.dev'
-const SERVER_URL = 'https://vidsync.fly.dev/';
+const SERVER_URL = 'wss://vidsync.fly.dev';
 
 let ws = null;
 let room = null;
+let hostToken = null; // only set on the host's browser; null for guests
 let isHost = false;
 let myId = null;
 let peerCount = 0;
@@ -23,7 +24,7 @@ log('background script loaded, SERVER_URL =', SERVER_URL);
 
 async function saveState() {
   try {
-    await chrome.storage.session.set({ room, activeTabId, isHost });
+    await chrome.storage.session.set({ room, hostToken, activeTabId, isHost });
   } catch (e) {
     log('saveState failed (storage.session unavailable?):', e.message);
   }
@@ -31,10 +32,11 @@ async function saveState() {
 
 async function restoreState() {
   try {
-    const data = await chrome.storage.session.get(['room', 'activeTabId', 'isHost']);
+    const data = await chrome.storage.session.get(['room', 'hostToken', 'activeTabId', 'isHost']);
     log('restoreState ->', data);
     if (data.room) {
       room = data.room;
+      hostToken = data.hostToken ?? null;
       activeTabId = data.activeTabId ?? null;
       isHost = data.isHost ?? false;
       connect();
@@ -68,8 +70,8 @@ function connect() {
   }
 
   ws.onopen = () => {
-    log('WS open, joining room', room);
-    ws.send(JSON.stringify({ type: 'join', room }));
+    log('WS open, joining room', room, hostToken ? '(host)' : '(guest)');
+    ws.send(JSON.stringify({ type: 'join', room, ...(hostToken ? { hostToken } : {}) }));
   };
 
   ws.onmessage = ({ data }) => {
@@ -209,6 +211,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   switch (msg.type) {
     case 'start-session':
       room = msg.room;
+      hostToken = msg.hostToken ?? null;
       activeTabId = msg.tabId ?? senderTabId;
       isHost = true;
       log('start-session  room=%s  activeTabId=%s', room, activeTabId);
@@ -218,6 +221,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     case 'join-session':
       room = msg.room;
+      hostToken = null; // guests never have the host token
       activeTabId = senderTabId;
       log('join-session  room=%s  activeTabId=%s', room, activeTabId);
       connect();

@@ -20,7 +20,7 @@ function getCert() {
 
 // ---------- Shared room state ----------
 
-// rooms: Map<roomId, Client[]>
+// rooms: Map<roomId, { clients: Client[], hostToken: string }>
 // Client: { ws, id, isHost }
 const rooms = new Map();
 let clientCounter = 0;
@@ -49,17 +49,22 @@ function handleConnection(ws, req) {
       roomId = String(msg.room).replace(/[^a-z0-9-]/gi, '').slice(0, 32);
       if (!roomId) return;
 
+      const hostToken = msg.hostToken ? String(msg.hostToken).slice(0, 64) : null;
+
       if (!rooms.has(roomId)) {
-        rooms.set(roomId, []);
-        isHost = true;
+        // First joiner creates the room; their token becomes the permanent host token
+        rooms.set(roomId, { clients: [], hostToken });
       }
 
       const room = rooms.get(roomId);
-      room.push({ ws, id, isHost });
+      // Host is whoever presents the matching token (survives reconnects and race conditions)
+      isHost = !!hostToken && hostToken === room.hostToken;
 
-      console.log(`[${id}] joined room="${roomId}"  isHost=${isHost}  peers=${room.length - 1}`);
+      room.clients.push({ ws, id, isHost });
 
-      ws.send(JSON.stringify({ type: 'joined', isHost, id, peers: room.length - 1 }));
+      console.log(`[${id}] joined room="${roomId}"  isHost=${isHost}  peers=${room.clients.length - 1}`);
+
+      ws.send(JSON.stringify({ type: 'joined', isHost, id, peers: room.clients.length - 1 }));
       broadcast(roomId, { type: 'peer-joined', id }, ws);
       return;
     }
@@ -78,23 +83,26 @@ function handleConnection(ws, req) {
     if (!roomId || !rooms.has(roomId)) return;
 
     const room = rooms.get(roomId);
-    const idx = room.findIndex(c => c.ws === ws);
+    const idx = room.clients.findIndex(c => c.ws === ws);
     if (idx === -1) return;
-    room.splice(idx, 1);
+    room.clients.splice(idx, 1);
 
     broadcast(roomId, { type: 'peer-left', id, wasHost: isHost });
 
-    if (room.length === 0) {
+    if (room.clients.length === 0) {
       console.log(`room "${roomId}" empty, deleted`);
       rooms.delete(roomId);
       return;
     }
 
-    if (isHost) {
-      room[0].isHost = true;
-      console.log(`[${id}] was host; promoting ${room[0].id}`);
-      room[0].ws.send(JSON.stringify({ type: 'promoted-to-host' }));
-      broadcast(roomId, { type: 'new-host', id: room[0].id }, room[0].ws);
+    // With token-based host identity, we only promote if there's genuinely no
+    // host token set (legacy fallback) — normally the host reconnects and
+    // re-claims host status via their token.
+    if (isHost && !room.hostToken) {
+      room.clients[0].isHost = true;
+      console.log(`[${id}] was host; promoting ${room.clients[0].id}`);
+      room.clients[0].ws.send(JSON.stringify({ type: 'promoted-to-host' }));
+      broadcast(roomId, { type: 'new-host', id: room.clients[0].id }, room.clients[0].ws);
     }
   });
 
@@ -105,7 +113,7 @@ function broadcast(roomId, msg, exclude = null) {
   const room = rooms.get(roomId);
   if (!room) return;
   const data = JSON.stringify(msg);
-  for (const client of room) {
+  for (const client of room.clients) {
     if (client.ws !== exclude && client.ws.readyState === 1 /* OPEN */) {
       client.ws.send(data);
     }
