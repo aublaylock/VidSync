@@ -1,8 +1,8 @@
 'use strict';
 
 // Development: 'wss://localhost:8443'  (Firefox requires WSS even for localhost)
-// Production:  'wss://your-server.fly.dev'
-const SERVER_URL = 'wss://vidsync.fly.dev';
+// Production:  'wss://vidsync-xqk0.onrender.com'
+const SERVER_URL = 'wss://vidsync-xqk0.onrender.com';
 
 let ws = null;
 let room = null;
